@@ -5,6 +5,7 @@ WORKDIR /app
 # Install system deps for common PDF libs (kept minimal)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy only requirements first to leverage Docker cache

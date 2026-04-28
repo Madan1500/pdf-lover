@@ -4,6 +4,7 @@ import requests
 
 # ── Backend endpoints ──────────────────────────────────────────────────────────
 BACKEND_MERGE = os.getenv("BACKEND_MERGE", "http://127.0.0.1:8000/merge")
+BACKEND_COMPRESS = os.getenv("BACKEND_COMPRESS", "http://127.0.0.1:8000/compress")
 
 # ── Page config ────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -439,7 +440,89 @@ elif page == "split":
 elif page == "convert":
     page_coming_soon("Convert PDF", "🔄", "Convert your PDF to Word, Excel, PNG, JPEG, and more.")
 elif page == "compress":
-    page_coming_soon("Compress PDF", "🗜️", "Reduce file size while maintaining quality.")
+    # Implement compress page
+    def page_compress():
+        st.markdown("""
+        <div class="page-header">
+            <span class="badge">Tool</span>
+            <h2>Compress PDF</h2>
+            <p>Upload a PDF and reduce its size by lowering image quality.</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        uploaded = st.file_uploader(
+            "Upload a PDF file to compress",
+            type=["pdf"],
+            accept_multiple_files=False,
+            label_visibility="collapsed",
+        )
+
+        quality = st.slider("Image quality (lower = smaller file)", min_value=10, max_value=95, value=60)
+
+        use_range = st.checkbox("Use page range", value=False)
+        start_page = None
+        end_page = None
+        if use_range:
+            cols = st.columns(2)
+            with cols[0]:
+                start_page = st.number_input("Start page", min_value=1, value=1, step=1)
+            with cols[1]:
+                end_page = st.number_input("End page", min_value=1, value=1, step=1)
+
+        if uploaded:
+            st.markdown(f"<div class='file-list'><div class='file-item'><span class='dot'></span>{uploaded.name}</div></div>", unsafe_allow_html=True)
+
+        # Preview size automatically when inputs change
+        preview_col = st.empty()
+        preview_text = ""
+        if uploaded:
+            try:
+                files = [("file", (uploaded.name, uploaded.getvalue(), "application/pdf"))]
+                data = {"quality": str(quality), "preview": "true"}
+                if use_range:
+                    data["start_page"] = str(start_page)
+                    data["end_page"] = str(end_page)
+                preview_col.info("Estimating compressed size...")
+                resp = requests.post(BACKEND_COMPRESS, files=files, data=data, timeout=120)
+                if resp.status_code == 200:
+                    js = resp.json()
+                    size_bytes = js.get("size_bytes")
+                    if size_bytes is not None:
+                        kb = size_bytes / 1024
+                        if kb < 1024:
+                            preview_text = f"Estimated size: {kb:.1f} KB"
+                        else:
+                            preview_text = f"Estimated size: {kb/1024:.2f} MB"
+                        preview_col.success(preview_text)
+                    else:
+                        preview_col.warning("Could not determine size preview.")
+                else:
+                    preview_col.error(f"Compression preview failed ({resp.status_code}): {resp.text}")
+            except Exception as e:
+                preview_col.error(f"Preview request failed: {e}")
+
+        if st.button("Compress PDF"):
+            if not uploaded:
+                st.warning("Please upload a PDF file to compress.")
+            else:
+                files = [("file", (uploaded.name, uploaded.getvalue(), "application/pdf"))]
+                data = {"quality": str(quality)}
+                if use_range:
+                    data["start_page"] = str(start_page)
+                    data["end_page"] = str(end_page)
+                with st.spinner("Compressing..."):
+                    try:
+                        resp = requests.post(BACKEND_COMPRESS, files=files, data=data, stream=True, timeout=180)
+                    except Exception as e:
+                        st.error(f"Request failed: {e}")
+                    else:
+                        if resp.status_code == 200:
+                            st.success("Compression complete — download below")
+                            st.download_button("⬇ Download compressed PDF", resp.content, file_name="compressed.pdf", mime="application/pdf")
+                        else:
+                            st.error(f"Compression failed ({resp.status_code}): {resp.text}")
+
+    page_compress()
 elif page == "protect":
     page_coming_soon("Protect PDF", "🔒", "Add passwords and restrict permissions on your PDFs.")
 elif page == "watermark":

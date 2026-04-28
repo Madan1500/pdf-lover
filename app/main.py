@@ -1,6 +1,16 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # register routers
 try:
@@ -10,6 +20,13 @@ except Exception:
 
 if merge_router:
 	app.include_router(merge_router)
+try:
+    from .api.compress_pdf import router as compress_router
+except Exception:
+    compress_router = None
+
+if compress_router:
+    app.include_router(compress_router)
 
 
 @app.get("/")
